@@ -1,0 +1,12 @@
+Company: Acme Cloud
+Title: Senior Backend Engineer
+Location: Remote - United States
+
+We are seeking a senior backend engineer with 7+ years of experience building distributed
+systems. The engineer will design Python and Golang microservices, operate Kubernetes workloads
+on AWS, build Kafka event pipelines, and expose gRPC and REST APIs. Experience with PostgreSQL,
+Docker, and Terraform is required. Candidates must be authorized to work in the United States;
+we are unable to sponsor visas for this role.
+
+Preferred qualifications:
+Experience with Redis, LangGraph, Agentic AI, and retrieval-augmented generation (RAG).

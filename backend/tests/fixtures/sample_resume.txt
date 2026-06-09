@@ -1,0 +1,19 @@
+Jordan Candidate
+Target role: Senior Software Engineer
+Location preference: Chicago, Remote
+Work authorization: Authorized to work in the US; no sponsorship required.
+
+SUMMARY
+Senior Software Engineer with 9 years of professional experience building cloud infrastructure,
+distributed systems, and high-throughput backend platforms. Current project work includes
+Agentic AI, LangGraph, LangChain, RAG, and tool-calling patterns.
+
+SKILLS
+Golang, Python, Kubernetes, Kafka, gRPC, AWS, Docker, Terraform, PostgreSQL, Redis,
+FastAPI, SQLAlchemy, REST APIs, microservices, Linux, Git
+
+EXPERIENCE
+- Designed Golang and Python services processing millions of events through Kafka.
+- Operated Kubernetes platforms on AWS and automated infrastructure with Terraform.
+- Built gRPC and REST APIs for distributed cloud services.
+- Prototyped a multi-agent job search assistant with LangGraph and local RAG retrieval.

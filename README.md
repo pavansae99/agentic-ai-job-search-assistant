@@ -339,15 +339,37 @@ to PostgreSQL without changing API handlers or agent logic.
   before storing real candidate data.
 - Require user approval before any external communication.
 
-## Roadmap
+## 🚀 Roadmap
 
-1. Add extraction confidence, source evidence, and a golden evaluation dataset.
-2. Add Chroma or pgvector embeddings, document provenance, and retrieval evaluation.
-3. Add LangGraph checkpointing, conditional routing, and human approval interrupts.
-4. Add authentication and PostgreSQL migrations with Alembic.
-5. Add job-source connectors behind rate-limited, policy-aware tools.
-6. Add observability, cost/latency metrics, and model quality regression gates.
-7. Build the Next.js dashboard described in `frontend/README.md`.
+### Completed
+- [x] FastAPI backend
+- [x] LangGraph workflow orchestration
+- [x] Multi-agent architecture
+- [x] OpenAI Structured Outputs integration
+- [x] Provider-agnostic LLM layer
+- [x] Deterministic scoring engine
+- [x] Application tracking with SQLite
+- [x] Typed error handling
+- [x] Shared provider lifecycle management
+- [x] 95%+ automated test coverage
+- [x] CI, Ruff, Mypy, and quality gates
+
+### In Progress
+- [ ] Human-in-the-loop review workflow
+- [ ] Confidence scoring and evidence tracking
+- [ ] End-to-end workflow deadlines
+
+### Planned
+- [ ] RAG with ChromaDB / pgvector
+- [ ] Planner agent for autonomous job search actions
+- [ ] Memory layer for applications and interview history
+- [ ] Next.js + Tailwind dashboard
+- [ ] Authentication and user accounts
+- [ ] Rate limiting and usage controls
+- [ ] Cost and token observability
+- [ ] Multi-provider support (Gemini, Claude)
+- [ ] Docker deployment
+- [ ] PostgreSQL + Alembic migrations
 
 ## Interview Talking Points
 

@@ -17,6 +17,13 @@ Unit tests cover:
 - LangChain tool registration and invocation.
 - Repository/service create, list, update, and not-found behavior.
 
+Provider tests use a fake OpenAI Responses client. They verify schema selection, `store=False`,
+model forwarding, typed SDK failures, refusals, incomplete and missing structured output,
+provider-factory decisions, and deterministic fallback without network calls or API keys.
+
+Lifecycle integration tests verify startup configuration failure, provider reuse across requests,
+compiled workflow reuse through shared services, and provider shutdown.
+
 Workflow tests invoke the compiled LangGraph and assert final state, ranking, email, and trace.
 
 Integration tests use FastAPI `TestClient` with a temporary SQLite database. They validate status
@@ -24,7 +31,7 @@ codes, serialized contracts, application lifecycle behavior, and request validat
 
 ## Coverage
 
-The configured minimum is 80% branch-aware coverage:
+The configured minimum is 90% branch-aware coverage:
 
 ```bash
 pytest --cov=job_search_assistant --cov-report=term-missing
@@ -41,14 +48,15 @@ GitHub Actions runs on pushes and pull requests:
 2. Run Ruff lint checks.
 3. Verify Ruff formatting.
 4. Run strict mypy against application code.
-5. Run pytest with branch coverage and the 80% threshold.
+5. Run pytest with branch coverage and the 90% threshold.
 
 ## Future Testing
 
 - Property-based tests for score bounds and monotonicity.
-- Golden datasets for parser and ranking evaluation.
+- Golden datasets for deterministic and LLM extraction quality.
+- Recorded provider contract tests that contain no candidate data.
 - Contract tests for Chroma or pgvector adapters.
-- Prompt and structured-output regression tests for each model provider.
+- Prompt-version and structured-output regression tests for each model provider.
 - Checkpoint/resume and human-approval tests.
 - PostgreSQL migration and concurrency tests.
 - Security tests for prompt injection, authorization, and data deletion.

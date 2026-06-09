@@ -11,6 +11,7 @@ from job_search_assistant.agents.job_analysis_agent import JobAnalysisAgent
 from job_search_assistant.agents.match_scoring_agent import MatchScoringAgent
 from job_search_assistant.agents.recruiter_email_agent import RecruiterEmailAgent
 from job_search_assistant.agents.resume_analysis_agent import ResumeAnalysisAgent
+from job_search_assistant.llm.provider import LLMProvider, create_llm_provider
 from job_search_assistant.schemas.job import JobMatchResponse
 from job_search_assistant.workflows.job_match_state import JobMatchState
 
@@ -20,6 +21,7 @@ class JobMatchWorkflow:
 
     def __init__(
         self,
+        llm_provider: LLMProvider | None = None,
         resume_analysis_agent: ResumeAnalysisAgent | None = None,
         job_analysis_agent: JobAnalysisAgent | None = None,
         match_scoring_agent: MatchScoringAgent | None = None,
@@ -27,11 +29,12 @@ class JobMatchWorkflow:
         recruiter_email_agent: RecruiterEmailAgent | None = None,
         career_coach_agent: CareerCoachAgent | None = None,
     ) -> None:
-        self._resume_analysis_agent = resume_analysis_agent or ResumeAnalysisAgent()
-        self._job_analysis_agent = job_analysis_agent or JobAnalysisAgent()
+        provider = llm_provider if llm_provider is not None else create_llm_provider()
+        self._resume_analysis_agent = resume_analysis_agent or ResumeAnalysisAgent(provider)
+        self._job_analysis_agent = job_analysis_agent or JobAnalysisAgent(provider)
         self._match_scoring_agent = match_scoring_agent or MatchScoringAgent()
         self._fit_ranking_agent = fit_ranking_agent or FitRankingAgent()
-        self._recruiter_email_agent = recruiter_email_agent or RecruiterEmailAgent()
+        self._recruiter_email_agent = recruiter_email_agent or RecruiterEmailAgent(provider)
         self._career_coach_agent = career_coach_agent or CareerCoachAgent()
         self.graph = self._build_graph()
 
@@ -91,20 +94,23 @@ class JobMatchWorkflow:
 
     def _analyze_resume(self, state: JobMatchState) -> dict[str, Any]:
         profile = self._resume_analysis_agent.run(state["raw_resume_text"])
+        metadata = self._resume_analysis_agent.provider_metadata.trace_fragment()
         return {
             "parsed_profile": profile,
             "reasoning_trace": [
                 f"ResumeAnalysisAgent extracted {len(profile.skills)} skills and "
-                f"{profile.years_of_experience:g} years of experience."
+                f"{profile.years_of_experience:g} years of experience with {metadata}."
             ],
         }
 
     def _analyze_job(self, state: JobMatchState) -> dict[str, Any]:
         job = self._job_analysis_agent.run(state["raw_job_description"])
+        metadata = self._job_analysis_agent.provider_metadata.trace_fragment()
         return {
             "parsed_job": job,
             "reasoning_trace": [
-                f"JobAnalysisAgent extracted {len(job.required_skills)} required skills."
+                f"JobAnalysisAgent extracted {len(job.required_skills)} required skills with "
+                f"{metadata}."
             ],
         }
 
@@ -136,9 +142,10 @@ class JobMatchWorkflow:
             state["ranking"],
             state["missing_keywords"],
         )
+        metadata = self._recruiter_email_agent.provider_metadata.trace_fragment()
         return {
             "recruiter_email": email,
             "reasoning_trace": [
-                "RecruiterEmailAgent generated outreach grounded in matched candidate skills."
+                f"RecruiterEmailAgent generated grounded outreach with {metadata}."
             ],
         }

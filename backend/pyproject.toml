@@ -12,6 +12,7 @@ dependencies = [
   "fastapi>=0.115,<1",
   "langchain>=0.3,<2",
   "langgraph>=0.2.60,<2",
+  "openai>=2.0,<3",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.6,<3",
   "sqlalchemy>=2.0.36,<3",
@@ -41,7 +42,7 @@ branch = true
 source = ["job_search_assistant"]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 90
 show_missing = true
 skip_covered = true
 exclude_also = [

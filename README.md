@@ -7,8 +7,9 @@ fit decision, missing-keyword analysis, recruiter outreach, career coaching, and
 application record.
 
 This is not a chat completion wrapped in an API. The system separates domain tools, specialized
-agents, typed workflow state, orchestration, persistence, and transport concerns so each can be
-tested and evolved independently.
+agents, a provider-neutral LLM boundary, typed workflow state, orchestration, persistence, and
+transport concerns so each can be tested and evolved independently. It can run with OpenAI
+Structured Outputs or in a fully deterministic, API-key-free mode.
 
 ## What It Does
 
@@ -33,10 +34,13 @@ The application models a goal-directed process as cooperating components rather 
 5. Deterministic policies handle decisions that should be reproducible and auditable.
 6. LangChain `BaseTool` adapters allow future chat models to select tools without coupling tools
    to a specific provider.
+7. A typed `LLMProvider` protocol lets extraction and drafting use OpenAI without putting SDK
+   imports, credentials, retries, or transport concerns inside agents.
 
-The MVP intentionally does not require an LLM key. This makes local execution and CI deterministic.
-An LLM can later augment extraction or writing behind the existing agent interfaces while Pydantic
-validation and deterministic scoring remain control boundaries.
+`LLM_PROVIDER=auto` selects OpenAI when `OPENAI_API_KEY` is configured and otherwise falls back to
+the deterministic provider. Tests force the deterministic provider. Pydantic validation and
+deterministic scoring remain control boundaries regardless of which provider performs extraction
+or drafting.
 
 ## Workflow
 
@@ -66,7 +70,8 @@ The typed `JobMatchState` carries raw inputs, parsed models, component scores, f
 ranking, missing keywords, recruiter email, and an append-only reasoning trace. The
 `CareerCoachAgent` evaluates the completed graph result as a post-workflow advisor.
 
-See [docs/agent-workflow.md](docs/agent-workflow.md) for node and state details.
+See [docs/agent-workflow.md](docs/agent-workflow.md) for node and state details and
+[docs/llm-architecture.md](docs/llm-architecture.md) for provider selection and failure policy.
 
 ## Architecture
 
@@ -76,15 +81,21 @@ HTTP clients
 FastAPI routes and Pydantic contracts
     |
 Application services
-    +----------------------+
-    |                      |
-LangGraph workflow     ApplicationService
-    |                      |
-Specialized agents     Repository
-    |                      |
-Deterministic tools    SQLAlchemy
-    |                      |
-Local retrieval        SQLite
+    |
++--- JobMatchWorkflow -------------------+
+|                                         |
+|    +--- AI-facing agents                +--- Application tracking
+|    |        |                                    |
+|    |    LLMProvider                         Repository
+|    |      /     \                                 |
+|    | OpenAI    Mock                         SQLAlchemy
+|    |    |        |                                |
+|    | Structured  Deterministic tools             SQLite
+|    | Outputs
+|    |
+|    +--- Scoring and ranking agents
+|             |
+|        Deterministic policy
 ```
 
 Key boundaries:
@@ -93,12 +104,53 @@ Key boundaries:
 - `services/`: use-case orchestration independent of FastAPI.
 - `workflows/`: graph topology and shared state.
 - `agents/`: single-purpose decision or transformation units.
+- `llm/`: provider protocol, factory, OpenAI adapter, deterministic fallback, and provider schemas.
 - `tools/`: deterministic capabilities and LangChain adapters.
 - `repositories/`: persistence operations.
 - `schemas/`: validation and public contracts.
 - `models/` and `database/`: SQLAlchemy persistence infrastructure.
 
 Read the design decisions in [docs/architecture.md](docs/architecture.md).
+
+## LLM Provider Layer
+
+The workflow uses one provider instance for resume extraction, job extraction, and recruiter email
+drafting. Agents depend only on `LLMProvider`; they never import the OpenAI SDK.
+
+| Configuration | Runtime behavior |
+|---|---|
+| `LLM_PROVIDER=auto`, key present | Use `OpenAIProvider` |
+| `LLM_PROVIDER=auto`, key absent or blank | Use deterministic `MockProvider` |
+| `LLM_PROVIDER=mock` | Always use deterministic tools |
+| `LLM_PROVIDER=openai`, key present | Use `OpenAIProvider` |
+| `LLM_PROVIDER=openai`, key absent or blank | Fail application startup |
+
+The OpenAI adapter uses the Responses API with native Pydantic Structured Outputs:
+
+```python
+response = client.responses.parse(
+    model=settings.openai_model,
+    instructions=trusted_system_instructions,
+    input=untrusted_resume_or_job_text,
+    text_format=ResumeProfileExtraction,
+    store=False,
+)
+```
+
+Provider output is validated at the boundary and converted to stable domain schemas. The adapter
+uses bounded SDK retries and a configurable timeout. Authentication, rate-limit, timeout,
+transient, invalid-response, and refusal failures have distinct internal types; FastAPI returns a
+redacted `503`. Runtime failures do not silently switch algorithms.
+
+FastAPI lifespan creates one provider/client, shared service set, and compiled LangGraph workflow.
+Existing reasoning traces include provider, model, and versioned prompt metadata without changing
+public response schemas.
+
+The deterministic score remains authoritative:
+
+```text
+LLM or local tools -> validated facts -> deterministic score -> deterministic ranking
+```
 
 ## Explainable Scoring
 
@@ -167,6 +219,7 @@ No email is sent automatically in this version.
 - FastAPI and Pydantic
 - LangGraph and LangChain Core tools
 - SQLAlchemy 2 and SQLite
+- OpenAI Python SDK and Structured Outputs
 - Local vector-search abstraction
 - pytest and pytest-cov
 - Ruff and strict mypy
@@ -184,6 +237,7 @@ backend/
       database/        # engine, sessions, declarative base
       models/          # SQLAlchemy models
       repositories/    # persistence boundary
+      llm/             # provider protocol and adapters
       schemas/         # Pydantic contracts
       services/        # application use cases
       tools/           # parsing, retrieval, email, LangChain adapters
@@ -214,6 +268,23 @@ Open:
 Configuration is read from environment variables or `.env`. Copy `.env.example` to `.env` only
 when local overrides are needed.
 
+Run without an external model:
+
+```bash
+export LLM_PROVIDER=mock
+```
+
+Enable OpenAI:
+
+```bash
+export LLM_PROVIDER=openai
+export OPENAI_API_KEY="your-key"
+export OPENAI_MODEL="gpt-5.4-mini"
+```
+
+Never commit `.env` or an API key. `auto` is the default and requires no key for local startup.
+Selecting `openai` explicitly requires a non-blank key and fails startup otherwise.
+
 ## Test And Quality Commands
 
 Run from `backend/`:
@@ -225,8 +296,9 @@ ruff format --check .
 mypy src/job_search_assistant
 ```
 
-Coverage fails below 80%. The initial suite covers agents, parser tools, scoring, ranking, local
-retrieval, repository/service behavior, API contracts, and the complete graph happy path.
+Coverage fails below 90%. The suite covers provider selection, typed errors, refusal and incomplete
+responses, shared lifecycle, structured OpenAI calls without network access, scoring, persistence,
+API contracts, and the complete graph.
 
 See [docs/testing-strategy.md](docs/testing-strategy.md).
 
@@ -260,19 +332,22 @@ to PostgreSQL without changing API handlers or agent logic.
 - Never commit a real resume or personally identifiable information.
 - Never commit API keys; use environment variables and `.env`.
 - Treat job descriptions and retrieved documents as untrusted input.
+- The OpenAI adapter sends only the text required for the requested extraction or draft and sets
+  `store=False`; review provider data controls before processing real candidate information.
+- Provider errors are logged without resume or job content and returned to clients as a generic `503`.
 - Add authentication, per-user authorization, encryption, retention policies, and audit logs
   before storing real candidate data.
 - Require user approval before any external communication.
 
 ## Roadmap
 
-1. Add provider-neutral LLM extraction and email-polish adapters with structured output.
+1. Add extraction confidence, source evidence, and a golden evaluation dataset.
 2. Add Chroma or pgvector embeddings, document provenance, and retrieval evaluation.
-3. Add LangGraph checkpointing and human approval interrupts.
+3. Add LangGraph checkpointing, conditional routing, and human approval interrupts.
 4. Add authentication and PostgreSQL migrations with Alembic.
 5. Add job-source connectors behind rate-limited, policy-aware tools.
-6. Build the Next.js dashboard described in `frontend/README.md`.
-7. Add observability, prompt/version tracing, offline evaluations, and score calibration.
+6. Add observability, cost/latency metrics, and model quality regression gates.
+7. Build the Next.js dashboard described in `frontend/README.md`.
 
 ## Interview Talking Points
 
@@ -280,6 +355,9 @@ to PostgreSQL without changing API handlers or agent logic.
 - How typed graph state reduces hidden coupling between agents.
 - Why agents and tools are separate concepts.
 - Where LangGraph adds value beyond a sequential function call.
+- Why the provider factory falls back only during configuration, not after a runtime model failure.
+- How Structured Outputs and domain validation constrain probabilistic extraction.
+- Why one injected provider instance is shared across a workflow invocation.
 - How a retrieval interface supports RAG without locking into Chroma.
 - Where to place human approval, checkpointing, retries, and idempotency.
 - How repository and service boundaries support a SQLite-to-PostgreSQL migration.

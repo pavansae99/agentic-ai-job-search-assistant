@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["LLM_PROVIDER"] = "mock"
 
 from job_search_assistant.database.base import Base
 from job_search_assistant.database.session import create_database_engine, get_db

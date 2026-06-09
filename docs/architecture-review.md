@@ -50,8 +50,10 @@ high-priority risks in this review should be addressed.
   chain-of-thought.
 - Parser and email capabilities are separated from the agents that invoke them.
 - LangChain `StructuredTool` adapters use typed Pydantic inputs.
-- The README is appropriately transparent that the MVP is deterministic and does not require an
-  external model.
+- A typed provider protocol keeps OpenAI SDK concerns outside agents.
+- OpenAI Structured Outputs are validated before entering graph state.
+- The deterministic provider keeps local execution and CI API-key-free.
+- Deterministic scoring remains independent from probabilistic extraction and drafting.
 - Recruiter email generation excludes missing skills, reducing the risk of fabricated claims.
 
 ### API And Persistence
@@ -66,7 +68,7 @@ high-priority risks in this review should be addressed.
 ### Engineering Quality
 
 - Ruff, strict mypy, pytest, branch coverage, and GitHub Actions are configured.
-- The current suite passes 27 tests with 94.89% coverage.
+- The hardened provider-layer suite passes 61 tests with 95.56% branch-aware coverage.
 - Synthetic fixtures make the repository safe to demonstrate.
 - The root README, architecture document, API contract, test strategy, workflow description, and
   demo script support different reader needs.
@@ -147,8 +149,8 @@ This is not a reason to remove LangGraph. It is an important interview tradeoff 
 
 ### Medium: Agent, Service, And Tool Layers Sometimes Duplicate One Another
 
-`ResumeAnalysisAgent` delegates directly to `ResumeParserTool`. `JobAnalysisAgent` delegates
-directly to `JobParserTool`. `MatchScoringAgent` delegates directly to
+`ResumeAnalysisAgent` and `JobAnalysisAgent` now own provider-neutral extraction, but in
+deterministic mode they still delegate directly to parser tools. `MatchScoringAgent` delegates to
 `MatchScoringService`.
 
 These wrappers demonstrate intended extension points, but today they add indirection without

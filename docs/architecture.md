@@ -23,28 +23,42 @@ optimizes for explicit contracts, replaceable AI providers, deterministic policy
                                     v
                          +----------+-----------+
                          | Application services |
-                         +----+-------------+---+
-                              |             |
-                              v             v
-                   +----------+---+   +-----+----------------+
-                   | LangGraph    |   | Application service |
-                   | workflow     |   +-----+----------------+
-                   +------+-------+         |
-                          |                 v
-                          v           +-----+------+
-                   +------+-------+   | Repository |
-                   | Agents       |   +-----+------+
-                   +------+-------+         |
-                          |                 v
-                          v           +-----+------+
-                   +------+-------+   | SQLAlchemy |
-                   | Tools        |   +-----+------+
-                   +------+-------+         |
-                          |                 v
-                    +-----+------+     +----+---+
-                    | Local/Chroma|     | SQLite |
-                    | retrieval   |     +--------+
-                    +------------+
+                         +----------+-----------+
+                                    |
+             +----------------------+----------------------+
+             |                                             |
+             v                                             v
+   +---------+----------+                      +-----------+----------+
+   | LangGraph workflow |                      | Application tracking |
+   +---------+----------+                      +-----------+----------+
+             |                                             |
+       +-----+------------------+                          v
+       |                        |                   +------+------+
+       v                        v                   | Repository  |
++------+--------+       +-------+----------+        +------+------+
+| AI-facing    |       | Scoring/ranking |               |
+| agents       |       | agents          |               v
++------+--------+       +-------+----------+        +------+------+
+       |                        |                   | SQLAlchemy  |
+       v                        v                   +------+------+
++------+--------+       +-------+----------+               |
+| LLMProvider  |       | Deterministic    |               v
++---+------+---+       | scoring policy   |          +----+---+
+    |      |           +------------------+          | SQLite |
+    |      |                                         +--------+
+    v      v
++---+---+  +----------+
+| OpenAI|  | Mock     |
+| API   |  | provider |
++-------+  +-----+----+
+                   |
+                   v
+             +-----+-------------+
+             | Deterministic     |
+             | parsing and email |
+             +-------------------+
+
+VectorSearchTool -> local lexical index -> future Chroma/pgvector adapter
 ```
 
 ## Layer Responsibilities
@@ -71,6 +85,10 @@ selection.
 `repositories` isolate SQLAlchemy query behavior. Services own not-found policy and response
 mapping.
 
+`llm` owns provider selection, OpenAI SDK integration, deterministic fallback, structured-output
+schemas, timeout/retry configuration, and provider error normalization. Agents import only the
+provider protocol.
+
 `schemas` are typed contracts shared at controlled boundaries. `models` are persistence-specific.
 
 ## Key Decisions
@@ -80,6 +98,17 @@ mapping.
 Resume parsing is intentionally lightweight and scoring is deterministic. This establishes a
 reliable baseline for tests, demos, and future LLM evaluation. Model output should improve
 extraction recall or writing quality, not silently redefine authorization or ranking policy.
+
+### Configuration-Time Fallback
+
+`LLM_PROVIDER=auto` uses OpenAI only when a non-blank key is present. Missing credentials select
+the deterministic provider before a workflow starts. An OpenAI failure after execution begins is
+returned as a typed service error rather than silently switching implementations. This makes
+quality, latency, and reasoning traces consistent within one request.
+
+One provider instance is injected into all AI-facing agents in a workflow. This keeps credentials
+and SDK construction at the composition boundary and makes provider behavior easy to replace in
+tests.
 
 ### Typed State
 

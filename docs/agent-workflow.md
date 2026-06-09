@@ -31,18 +31,22 @@ The graph is built with LangGraph `StateGraph` and compiled once per workflow in
 
 ## Nodes
 
-`ResumeAnalysisAgent` calls `ResumeParserTool` and emits a `CandidateProfile`.
+`ResumeAnalysisAgent` asks the injected `LLMProvider` for a `CandidateProfile`. The OpenAI adapter
+uses a structured response; the mock adapter calls `ResumeParserTool`.
 
-`JobAnalysisAgent` calls `JobParserTool` and separates required from preferred qualifications.
+`JobAnalysisAgent` asks the same provider for a `ParsedJob`. The provider boundary separates
+required from preferred qualifications and validates the result before state advances.
 
 `MatchScoringAgent` calls `MatchScoringService` to compute skill, experience, location, and
-authorization scores. It also identifies missing required keywords.
+authorization scores. It also identifies missing required keywords. It never delegates ranking
+policy to the model.
 
 `FitRankingAgent` maps the final score to a stable category. Keeping thresholds in code makes policy
 changes visible in review and tests.
 
 `RecruiterEmailAgent` uses only matched profile facts. Missing job skills are excluded so outreach
-does not invent experience.
+does not invent experience. It asks the provider to draft the email after deterministic scoring
+and ranking are complete.
 
 `CareerCoachAgent` runs against the completed graph result and produces truthful next actions.
 
@@ -71,6 +75,11 @@ input and resume from the exact node afterward.
 
 - Pydantic rejects invalid state at system boundaries.
 - Deterministic node failures are not retried blindly.
-- Future provider calls should retry only transient failures with bounded backoff.
+- The OpenAI SDK retries transient failures up to `OPENAI_MAX_RETRIES` and applies
+  `OPENAI_TIMEOUT_SECONDS`.
+- Exhausted provider errors become typed `LLMProviderError` subclasses and a redacted HTTP `503`.
+- Runtime provider errors do not silently switch to deterministic extraction.
+- Reasoning traces record provider, model, and prompt version without recording source text.
+- The configured end-to-end workflow deadline remains a Phase 2 placeholder.
 - External actions should use idempotency keys.
 - Logs and traces must redact resume content and secrets.
